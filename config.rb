@@ -176,15 +176,8 @@ class CustomMarkdownRenderer < Redcarpet::Render::HTML
     slug = text.parameterize
     tag_name = "h#{header_level}"
     anchor_link = "<a id='#{slug}' class='anchor' href='##{slug}' aria-hidden='true'></a>"
-    header_tag_open = "<#{tag_name} id='#{slug}'>"
 
-    output = ""
-    output << header_tag_open
-    output << anchor_link
-    output << text
-    output << "</#{tag_name}>"
-
-    output
+    "<#{tag_name} id='#{slug}'>#{anchor_link}#{text}</#{tag_name}>"
   end
 end
 
