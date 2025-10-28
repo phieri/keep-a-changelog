@@ -201,8 +201,9 @@ helpers do
   end
 
   def available_translation_for(language)
+    language_code = language.first
     language_name = language.last[:name]
-    language_path = "source/#{language.first}"
+    language_path = "source/#{language_code}"
 
     if File.exist?("#{language_path}/#{$last_version}")
       "#{$last_version} #{language_name}"
