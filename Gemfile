@@ -11,6 +11,6 @@ gem "middleman-gh-pages"
 gem "redcarpet"
 gem "standard", "~> 1.39"
 
-group :development, :test do 
+group :development, :test do
   gem "minitest"
 end

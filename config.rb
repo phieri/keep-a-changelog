@@ -1,3 +1,4 @@
+# rubocop:disable Style/GlobalVars
 # --------------------------------------
 #   Config
 # --------------------------------------
@@ -262,3 +263,4 @@ activate :autoprefixer do |config|
   config.browsers = ["last 2 versions", "Explorer >= 10"]
   config.cascade = false
 end
+# rubocop:enable Style/GlobalVars
