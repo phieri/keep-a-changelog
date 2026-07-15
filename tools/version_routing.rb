@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "rubygems" # Gem::Version
+require_relative "version_support"
 
 # Pure, framework-free routing logic extracted from config.rb so it can be
 # unit-tested without booting Middleman. It answers one question for each entry
@@ -17,6 +17,7 @@ require "rubygems" # Gem::Version
 # Keeping these here means the "2.0.0 must not become the default until it is
 # released" contract is asserted in CI, not just trusted to live config.
 module VersionRouting
+  extend VersionSupport
   module_function
 
   # 2.0.0 is written and built on every run but stays unpublished — 1.1.0 remains
@@ -36,9 +37,10 @@ module VersionRouting
   # version strings that actually have a directory for the language.
   def published_version_for(installed, last_version:)
     cap = comparable_version(last_version)
-    installed
-      .filter_map { |version| [comparable_version(version), version] if comparable_version(version) <= cap }
-      .max_by(&:first)&.last
+    installed.filter_map do |version|
+      comparable = comparable_version(version)
+      [comparable, version] if comparable <= cap
+    end.max_by(&:first)&.last
   end
 
   # Newest installed version to expose in the version selector. A production build
@@ -48,14 +50,6 @@ module VersionRouting
     pool = installed
     pool = pool.select { |version| comparable_version(version) <= comparable_version(last_version) } if build
     pool.max_by { |version| comparable_version(version) }
-  end
-
-  def normalize_version(version)
-    version.to_s.strip.sub(/\Av/, "")
-  end
-
-  def comparable_version(version)
-    Gem::Version.new(normalize_version(version))
   end
 
   # The landing redirect for "/" and "/en/". Mirrors the shipped JavaScript: an

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "rubygems" # Gem::Version
+require_relative "version_support"
 
 # Derives a version-pinned view of the project's own CHANGELOG.md — the hero
 # "Example changelog" shown on each spec page — so the example always follows
@@ -30,6 +30,7 @@ require "rubygems" # Gem::Version
 # Pure and framework-free so it can be unit-tested without booting Middleman.
 # See test/changelog_pin_test.rb.
 module ChangelogPin
+  extend VersionSupport
   module_function
 
   # A version heading, dated or not, e.g. "## [1.1.0] - 2019-02-15".
@@ -74,14 +75,6 @@ module ChangelogPin
 
       [comparable_version(normalized), normalized]
     end.max_by(&:first)&.last
-  end
-
-  def normalize_version(version)
-    version.to_s.strip.sub(/\Av/, "")
-  end
-
-  def comparable_version(version)
-    Gem::Version.new(normalize_version(version))
   end
 
   def version_segments(version)
