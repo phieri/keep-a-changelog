@@ -49,14 +49,15 @@ module ChangelogPin
   # track (and any still-undocumented draft) shows the live file, Unreleased
   # section and all.
   def pinned?(text, page_version)
-    newest = text.scan(VERSION_HEADING).flatten.max_by { |v| Gem::Version.new(v) }
+    newest = text.scan(VERSION_HEADING).flatten.max_by { |version| comparable_version(version) }
     return false unless newest
+
     track(newest) > track(page_version)
   end
 
   # A version's major.minor track, as a comparable Gem::Version.
   def track(version)
-    Gem::Version.new(version.split(".").first(2).join("."))
+    Gem::Version.new(version_segments(version).first(2).join("."))
   end
 
   # The newest release recorded in +text+ on the page's major.minor track —
@@ -64,11 +65,27 @@ module ChangelogPin
   # so the 2.0.0 page pins to the last 2.0.x, not to 2.0.0 itself. Returns nil
   # if the changelog has no entry on that track.
   def track_release(text, page_version)
-    major, minor, = page_version.split(".")
+    major, minor, = version_segments(page_version)
     prefix = "#{major}.#{minor}."
-    text.scan(VERSION_HEADING).flatten
-      .select { |version| version.start_with?(prefix) }
-      .max_by { |version| Gem::Version.new(version) }
+
+    text.scan(VERSION_HEADING).flatten.filter_map do |version|
+      normalized = normalize_version(version)
+      next unless normalized.start_with?(prefix)
+
+      [comparable_version(normalized), normalized]
+    end.max_by(&:first)&.last
+  end
+
+  def normalize_version(version)
+    version.to_s.strip.sub(/\Av/, "")
+  end
+
+  def comparable_version(version)
+    Gem::Version.new(normalize_version(version))
+  end
+
+  def version_segments(version)
+    normalize_version(version).split(".")
   end
 
   # The changelog as it stood at the last release on +page_version+'s track.
@@ -77,7 +94,7 @@ module ChangelogPin
     cutoff_string = track_release(text, page_version)
     return text unless cutoff_string
 
-    cutoff = Gem::Version.new(cutoff_string)
+    cutoff = comparable_version(cutoff_string)
     out = []
     dropping = false
 
@@ -88,7 +105,7 @@ module ChangelogPin
       # these lines are kept or dropped on their own terms, never as part of a
       # dropped section body.
       if (match = line.match(VERSION_LINK_DEF))
-        out << line unless Gem::Version.new(match[1]) > cutoff
+        out << line unless comparable_version(match[1]) > cutoff
         next
       end
       if line.match?(UNRELEASED_LINK_DEF)
@@ -106,7 +123,7 @@ module ChangelogPin
         next
       end
       if (match = line.match(VERSION_HEADING))
-        dropping = Gem::Version.new(match[1]) > cutoff
+        dropping = comparable_version(match[1]) > cutoff
         out << line unless dropping
         next
       end

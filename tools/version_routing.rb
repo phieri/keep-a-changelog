@@ -35,10 +35,10 @@ module VersionRouting
   # production never routes to an unpublished draft. `installed` is the list of
   # version strings that actually have a directory for the language.
   def published_version_for(installed, last_version:)
-    cap = Gem::Version.new(last_version)
+    cap = comparable_version(last_version)
     installed
-      .select { |v| Gem::Version.new(v) <= cap }
-      .max_by { |v| Gem::Version.new(v) }
+      .filter_map { |version| [comparable_version(version), version] if comparable_version(version) <= cap }
+      .max_by(&:first)&.last
   end
 
   # Newest installed version to expose in the version selector. A production build
@@ -46,8 +46,16 @@ module VersionRouting
   # previewed and linked before they are published.
   def exposed_version_for(installed, last_version:, build:)
     pool = installed
-    pool = pool.select { |v| Gem::Version.new(v) <= Gem::Version.new(last_version) } if build
-    pool.max_by { |v| Gem::Version.new(v) }
+    pool = pool.select { |version| comparable_version(version) <= comparable_version(last_version) } if build
+    pool.max_by { |version| comparable_version(version) }
+  end
+
+  def normalize_version(version)
+    version.to_s.strip.sub(/\Av/, "")
+  end
+
+  def comparable_version(version)
+    Gem::Version.new(normalize_version(version))
   end
 
   # The landing redirect for "/" and "/en/". Mirrors the shipped JavaScript: an

@@ -65,6 +65,10 @@ class ChangelogPinTrackReleaseTest < Minitest::Test
   def test_a_track_with_no_recorded_release_returns_nil
     assert_nil ChangelogPin.track_release(FIXTURE, "1.0.0")
   end
+
+  def test_v_prefixed_versions_are_supported
+    assert_equal "2.0.1", ChangelogPin.track_release("## [2.0.1] - 2026-08-01\n", "v2.0.0")
+  end
 end
 
 class ChangelogPinPinTest < Minitest::Test

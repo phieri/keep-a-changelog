@@ -50,6 +50,10 @@ class VersionRoutingPublishedVersionTest < Minitest::Test
   def test_no_installed_version_yields_nil
     assert_nil VersionRouting.published_version_for([], last_version: "1.1.0")
   end
+
+  def test_v_prefixed_versions_are_supported
+    assert_equal "v1.1.0", VersionRouting.published_version_for(%w[0.3.0 v1.1.0], last_version: "v1.1.0")
+  end
 end
 
 class VersionRoutingExposedVersionTest < Minitest::Test
