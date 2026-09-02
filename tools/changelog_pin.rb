@@ -31,6 +31,7 @@ require_relative "version_support"
 # See test/changelog_pin_test.rb.
 module ChangelogPin
   extend VersionSupport
+
   module_function
 
   # A version heading, dated or not, e.g. "## [1.1.0] - 2019-02-15".

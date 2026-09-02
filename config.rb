@@ -1,3 +1,4 @@
+# standard:disable Style/GlobalVars
 # --------------------------------------
 #   Config
 # --------------------------------------
@@ -17,6 +18,7 @@ require_relative "tools/changelog_pin"
 # refresh automatically on every build/deploy — no manual regeneration step.
 require_relative "translation_coverage"
 
+# standard:disable Style/GlobalVars
 # ----- Site ----- #
 # Last version should be the latest English version since Keep a Changelog is
 # first written in English, then translated into other languages later.
@@ -226,7 +228,7 @@ language_dirs = Dir.glob("source/*/*/")
   spec_versions.each do |version|
     next if File.directory?("source/#{code}/#{version}") # real translation exists
     proxy "/#{code}/#{version}/index.html", "/missing.html",
-      locals: { language_code: code, version: version }, ignore: true
+      locals: {language_code: code, version: version}, ignore: true
   end
 end
 
@@ -338,7 +340,7 @@ helpers do
     require "date"
     d = Date.parse(iso)
     n = d.day
-    suffix = (11..13).include?(n % 100) ? "th" : { 1 => "st", 2 => "nd", 3 => "rd" }.fetch(n % 10, "th")
+    suffix = (11..13).cover?(n % 100) ? "th" : {1 => "st", 2 => "nd", 3 => "rd"}.fetch(n % 10, "th")
     "#{d.strftime("%B")} #{n}#{suffix}, #{d.year}"
   end
 
@@ -372,16 +374,16 @@ helpers do
     out = []
     text.each_line do |raw|
       line = raw.chomp
-      if line =~ /\A\s*```/
+      if /\A\s*```/.match?(line)
         in_code = !in_code
         out << line
         next
       end
       if in_code || line.strip.empty? ||
-         line =~ /\A\s*(#|[-*+]\s|\d+\.\s|>|\|)/ || # heading / list / quote / table
-         line =~ /\A\s{4,}\S/ ||                    # indented code
-         out.empty? || out.last.strip.empty? ||
-         out.last =~ /\A\s*(#|```)/                 # previous line was a heading/fence
+          line =~ /\A\s*(#|[-*+]\s|\d+\.\s|>|\|)/ || # heading / list / quote / table
+          line =~ /\A\s{4,}\S/ ||                    # indented code
+          out.empty? || out.last.strip.empty? ||
+          out.last =~ /\A\s*(#|```)/                 # previous line was a heading/fence
         out << line
       else
         out[-1] = "#{out.last} #{line.strip}"
@@ -444,3 +446,4 @@ activate :autoprefixer do |config|
   config.browsers = ["last 2 versions", "Explorer >= 10"]
   config.cascade = false
 end
+# standard:enable Style/GlobalVars

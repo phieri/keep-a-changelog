@@ -1,36 +1,35 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'yaml'
-require 'json'
-require 'optparse'
-require 'set'
-require_relative 'tools/version_routing'
+require "yaml"
+require "json"
+require "optparse"
+require_relative "tools/version_routing"
 
 # Translation Coverage Analyzer for Keep a Changelog
 # This utility analyzes which sections are translated in each language version
 # and identifies missing translations compared to the English baseline.
 
 class TranslationCoverageAnalyzer
-  SOURCE_DIR = File.join(__dir__, 'source')
+  SOURCE_DIR = File.join(__dir__, "source")
 
   # Known versions in order (newest first)
-  VERSIONS = ['2.0.0', '1.1.0', '1.0.0', '0.3.0'].freeze
+  VERSIONS = ["2.0.0", "1.1.0", "1.0.0", "0.3.0"].freeze
 
   # Latest version under development and the version it evolves from. The
   # `new` / `updated` CSS markers in the English LATEST_VERSION file describe how
   # each section changed relative to PREVIOUS_VERSION (see PR #600). The migration
   # report uses them to tell translators which sections to add, revise, or carry.
-  LATEST_VERSION   = '2.0.0'
-  PREVIOUS_VERSION = '1.1.0'
+  LATEST_VERSION = "2.0.0"
+  PREVIOUS_VERSION = "1.1.0"
 
   # Sections renamed between PREVIOUS_VERSION and LATEST_VERSION (latest => previous).
-  SECTION_RENAMES = { 'releases' => 'github-releases' }.freeze
+  SECTION_RENAMES = {"releases" => "github-releases"}.freeze
 
   # HAML versions (newest first) used to find a version's predecessor for the
   # consistency audit. 0.3.0 is excluded: it uses translated markdown headings,
   # not stable section IDs, so it can't be diffed section-for-section.
-  CONSISTENCY_VERSIONS = ['2.0.0', '1.1.0', '1.0.0'].freeze
+  CONSISTENCY_VERSIONS = ["2.0.0", "1.1.0", "1.0.0"].freeze
 
   # Below this section-text similarity, a drift is "major" (likely a wholesale
   # re-translation) rather than a minor word-level tweak.
@@ -45,7 +44,7 @@ class TranslationCoverageAnalyzer
   # are the literal section names users put in their own changelogs, not prose).
   # Flagged for review when present in the English section but missing from the
   # translation.
-  GLOSSARY_TERMS = ['[YANKED]', 'Unreleased', 'CHANGELOG'].freeze
+  GLOSSARY_TERMS = ["[YANKED]", "Unreleased", "CHANGELOG"].freeze
 
   # The six canonical change types — also identifier-like, checked separately so a
   # language that localizes them in prose is easy to spot.
@@ -58,7 +57,7 @@ class TranslationCoverageAnalyzer
     @options = options
     @version_filter = options[:version]
     @language_filter = options[:language]
-    @format = options[:format] || 'text'
+    @format = options[:format] || "text"
     @show_details = options[:details]
     @migration = options[:migration]
     @consistency = options[:consistency]
@@ -70,7 +69,7 @@ class TranslationCoverageAnalyzer
 
   def analyze
     results = {
-      analyzed_at: Time.now.utc.strftime('%Y-%m-%d %H:%M:%S UTC'),
+      analyzed_at: Time.now.utc.strftime("%Y-%m-%d %H:%M:%S UTC"),
       versions: {}
     }
 
@@ -91,9 +90,9 @@ class TranslationCoverageAnalyzer
     results = analyze
 
     case @format
-    when 'json'
+    when "json"
       print_json_report(results)
-    when 'csv'
+    when "csv"
       print_csv_report(results)
     else
       print_text_report(results)
@@ -107,12 +106,12 @@ class TranslationCoverageAnalyzer
   end
 
   def analyze_version(version)
-    english_sections = extract_sections('en', version)
+    english_sections = extract_sections("en", version)
 
     return nil if english_sections.nil?
 
     # Check if this version uses markdown (0.3.0) - sections won't have explicit IDs
-    uses_markdown = version == '0.3.0'
+    uses_markdown = version == "0.3.0"
 
     version_data = {
       baseline_sections: english_sections,
@@ -122,7 +121,7 @@ class TranslationCoverageAnalyzer
     }
 
     available_languages(version).each do |lang|
-      next if lang == 'en' # Skip English baseline
+      next if lang == "en" # Skip English baseline
       next if @language_filter && lang != @language_filter
 
       lang_sections = extract_sections(lang, version)
@@ -130,7 +129,7 @@ class TranslationCoverageAnalyzer
 
       if uses_markdown
         # For markdown versions, compare by count only (headings are translated)
-        coverage_pct = lang_sections.length == english_sections.length ? 100.0 :
+        coverage_pct = (lang_sections.length == english_sections.length) ? 100.0 :
                       (lang_sections.length.to_f / english_sections.length * 100).round(2)
 
         version_data[:languages][lang] = {
@@ -165,13 +164,13 @@ class TranslationCoverageAnalyzer
   # heading anchors) from 2.0.0 on. Both spellings are treated as the same page.
   def source_file(language, version)
     base = File.join(SOURCE_DIR, language, version)
-    ['index.html.haml', 'index.html.md']
+    ["index.html.haml", "index.html.md"]
       .map { |name| File.join(base, name) }
       .find { |path| File.exist?(path) }
   end
 
   def markdown_source?(language, version)
-    source_file(language, version)&.end_with?('.md')
+    source_file(language, version)&.end_with?(".md")
   end
 
   def extract_sections(language, version)
@@ -179,8 +178,8 @@ class TranslationCoverageAnalyzer
 
     return nil if file_path.nil?
 
-    content = File.read(file_path, encoding: 'UTF-8')
-    return extract_markdown_anchor_sections(content) if file_path.end_with?('.md')
+    content = File.read(file_path, encoding: "UTF-8")
+    return extract_markdown_anchor_sections(content) if file_path.end_with?(".md")
 
     sections = []
 
@@ -196,11 +195,10 @@ class TranslationCoverageAnalyzer
         heading = match[0].strip
         # Convert heading to slug (e.g., "What's a change log?" -> "whats-a-change-log")
         slug = heading.downcase
-                      .gsub(/[''']/, '')  # Remove apostrophes
-                      .gsub(/[^a-z0-9\s-]/, '')  # Remove non-alphanumeric except spaces and hyphens
-                      .gsub(/\s+/, '-')  # Replace spaces with hyphens
-                      .gsub(/-+/, '-')   # Replace multiple hyphens with single
-                      .gsub(/^-|-$/, '')  # Remove leading/trailing hyphens
+          .delete("'")  # Remove apostrophes
+          .gsub(/[^a-z0-9\s-]/, "")  # Remove non-alphanumeric except spaces and hyphens
+          .gsub(/\s+/, "-").squeeze("-")   # Replace multiple hyphens with single
+          .gsub(/^-|-$/, "")  # Remove leading/trailing hyphens
         sections << slug unless slug.empty?
       end
     end
@@ -229,10 +227,10 @@ class TranslationCoverageAnalyzer
   end
 
   def available_languages(version)
-    Dir.glob(File.join(SOURCE_DIR, '*', version))
-       .select { |path| File.directory?(path) }
-       .map { |path| File.basename(File.dirname(path)) }
-       .sort
+    Dir.glob(File.join(SOURCE_DIR, "*", version))
+      .select { |path| File.directory?(path) }
+      .map { |path| File.basename(File.dirname(path)) }
+      .sort
   end
 
   # Classify each section of an English HAML file by how much it changed relative
@@ -244,17 +242,17 @@ class TranslationCoverageAnalyzer
   # Only the English LATEST_VERSION file carries these markers; others come back
   # as all-:unchanged, which is harmless.
   def extract_section_changes(language, version)
-    file_path = File.join(SOURCE_DIR, language, version, 'index.html.haml')
+    file_path = File.join(SOURCE_DIR, language, version, "index.html.haml")
     return {} unless File.exist?(file_path)
 
     changes = {}
     current = nil
 
-    File.foreach(file_path, encoding: 'UTF-8') do |line|
+    File.foreach(file_path, encoding: "UTF-8") do |line|
       if (heading = line.match(/^\s*%h[34]#([\w-]+)/))
         current = heading[1]
         whole_new = section_marker(line) == :new
-        changes[current] = { status: (whole_new ? :new : :unchanged), updated: 0, new: 0 }
+        changes[current] = {status: (whole_new ? :new : :unchanged), updated: 0, new: 0}
         next
       end
 
@@ -276,7 +274,7 @@ class TranslationCoverageAnalyzer
   # Returns :new / :updated if the HAML element starting this line carries that
   # class (e.g. `%p.updated`, `%li.new`, `%h4#git.new`), otherwise nil.
   def section_marker(line)
-    head = line[/^\s*([%.][\w#.\-]*)/, 1]
+    head = line[/^\s*([%.][\w#.-]*)/, 1]
     return nil unless head
     return :new if head.match?(/\.new\b/)
     return :updated if head.match?(/\.updated\b/)
@@ -286,8 +284,8 @@ class TranslationCoverageAnalyzer
 
   # Markers reduced to the migration vocabulary: { section_id => :new|:reworded|:unchanged }.
   def marker_status_map(version)
-    extract_section_changes('en', version).transform_values do |c|
-      c[:status] == :updated ? :reworded : c[:status]
+    extract_section_changes("en", version).transform_values do |c|
+      (c[:status] == :updated) ? :reworded : c[:status]
     end
   end
 
@@ -300,18 +298,18 @@ class TranslationCoverageAnalyzer
   def extract_section_texts(language, version)
     file_path = source_file(language, version)
     return {} if file_path.nil?
-    return extract_markdown_section_texts(file_path) if file_path.end_with?('.md')
+    return extract_markdown_section_texts(file_path) if file_path.end_with?(".md")
 
     texts = {}
     current = nil
 
-    File.foreach(file_path, encoding: 'UTF-8') do |raw|
+    File.foreach(file_path, encoding: "UTF-8") do |raw|
       line = raw.rstrip
 
       if (heading = line.match(/^\s*%h[34]#([\w-]+)/))
         current = heading[1]
-        texts[current] ||= +''
-        append_fragment(texts[current], line.sub(/^\s*%h[34]#[\w-]+(?:\.[\w-]+)*/, ''))
+        texts[current] ||= +""
+        append_fragment(texts[current], line.sub(/^\s*%h[34]#[\w-]+(?:\.[\w-]+)*/, ""))
         next
       end
 
@@ -329,22 +327,22 @@ class TranslationCoverageAnalyzer
       append_fragment(texts[current], line)
     end
 
-    texts.transform_values { |t| t.gsub(/\s+/, ' ').strip }
+    texts.transform_values { |t| t.gsub(/\s+/, " ").strip }
   end
 
   def append_fragment(buffer, line)
     frag = normalize_fragment(line)
-    buffer << ' ' << frag unless frag.empty?
+    buffer << " " << frag unless frag.empty?
   end
 
   # Markdown counterpart of the HAML text extractor: the translator-visible words
   # of each anchored section, with front matter, link URLs, inline HTML, list
   # markers and emphasis punctuation stripped and whitespace collapsed.
   def extract_markdown_section_texts(file_path)
-    lines = File.read(file_path, encoding: 'UTF-8').lines.map(&:rstrip)
+    lines = File.read(file_path, encoding: "UTF-8").lines.map(&:rstrip)
 
     # Drop YAML front matter (--- ... --- at the very top of the file).
-    if lines.first == '---' && (closing = lines[1..].index('---'))
+    if lines.first == "---" && (closing = lines[1..].index("---"))
       lines = lines[(closing + 2)..] || []
     end
 
@@ -360,7 +358,7 @@ class TranslationCoverageAnalyzer
 
       if !in_code && (heading = line.match(/^\#{2,4}\s+(.*?)\s*\{#([\w-]+)\}\s*$/))
         current = heading[2]
-        texts[current] = +''
+        texts[current] = +""
         texts[current] << normalize_markdown_fragment(heading[1])
         next
       end
@@ -369,10 +367,10 @@ class TranslationCoverageAnalyzer
       next if line.match?(/^\[[^\]]+\]:\s*\S/) # link reference definitions
 
       frag = in_code ? line.strip : normalize_markdown_fragment(line)
-      texts[current] << ' ' << frag unless frag.empty?
+      texts[current] << " " << frag unless frag.empty?
     end
 
-    texts.transform_values { |t| t.gsub(/\s+/, ' ').strip }
+    texts.transform_values { |t| t.gsub(/\s+/, " ").strip }
   end
 
   # Reduce a markdown line to its human-visible words.
@@ -381,10 +379,10 @@ class TranslationCoverageAnalyzer
     s = s.gsub(/!\[([^\]]*)\]\([^)]*\)/, '\1')  # images -> alt text
     s = s.gsub(/\[([^\]]+)\]\([^)]*\)/, '\1')   # inline links -> link text
     s = s.gsub(/\[([^\]]+)\]\[[^\]]*\]/, '\1')  # reference links -> link text
-    s = s.gsub(/<[^>]+>/, '') while s.match?(/<[^>]+>/) # inline HTML, keep inner text
-    s = s.sub(/^\s*(?:[-*+]|\d+\.)\s+/, '')     # list markers
-    s = s.tr('`*_', '')                          # code ticks / emphasis punctuation
-    s.gsub(/\s+/, ' ').strip
+    s = s.gsub(/<[^>]+>/, "") while s.match?(/<[^>]+>/) # inline HTML, keep inner text
+    s = s.sub(/^\s*(?:[-*+]|\d+\.)\s+/, "")     # list markers
+    s = s.tr("`*_", "")                          # code ticks / emphasis punctuation
+    s.gsub(/\s+/, " ").strip
   end
 
   # Reduce a HAML line to its human-visible words.
@@ -431,15 +429,16 @@ class TranslationCoverageAnalyzer
   # relative to prev_version: :new (no counterpart), :reworded (text differs), or
   # :unchanged. Renamed sections are matched via SECTION_RENAMES.
   def compute_section_changes(prev_version, target_version)
-    prev_texts   = extract_section_texts('en', prev_version)
-    target_texts = extract_section_texts('en', target_version)
+    prev_texts = extract_section_texts("en", prev_version)
+    target_texts = extract_section_texts("en", target_version)
 
     target_texts.each_with_object({}) do |(id, text), result|
       prev_id = SECTION_RENAMES[id] || id
       result[id] =
         if !prev_texts.key?(prev_id) then :new
         elsif prev_texts[prev_id] != text then :reworded
-        else :unchanged
+        else
+          :unchanged
         end
     end
   end
@@ -451,9 +450,9 @@ class TranslationCoverageAnalyzer
   #   carry  — section is unchanged; the prior translation can be reused as-is
   def migration_report
     target = @version_filter || LATEST_VERSION
-    prev   = PREVIOUS_VERSION
+    prev = PREVIOUS_VERSION
 
-    target_sections = extract_sections('en', target)
+    target_sections = extract_sections("en", target)
     abort("No English baseline found for #{target}") if target_sections.nil? || target_sections.empty?
 
     # Source of truth: diff the English text of every section between versions.
@@ -462,28 +461,28 @@ class TranslationCoverageAnalyzer
     # sources carry no markers, so the audit is skipped (nil) rather than
     # reporting every changed section as a spurious discrepancy.
     discrepancies =
-      if markdown_source?('en', target)
+      if markdown_source?("en", target)
         nil
       else
         markers = marker_status_map(target)
         target_sections.filter_map do |sec|
-          marked   = markers[sec]   || :unchanged
-          detected = computed[sec]  || :unchanged
+          marked = markers[sec] || :unchanged
+          detected = computed[sec] || :unchanged
           next if marked == detected
 
-          { section: sec, marked: marked, computed: detected }
+          {section: sec, marked: marked, computed: detected}
         end
       end
 
-    langs = available_languages(prev).reject { |l| l == 'en' }
+    langs = available_languages(prev).reject { |l| l == "en" }
     langs.select! { |l| l == @language_filter } if @language_filter
 
     rows = langs.map do |lang|
       prev_sections = extract_sections(lang, prev) || []
-      buckets = { add: [], revise: [], carry: [] }
+      buckets = {add: [], revise: [], carry: []}
 
       target_sections.each do |sec|
-        status   = computed[sec] || :unchanged
+        status = computed[sec] || :unchanged
         has_prev = prev_sections.include?(SECTION_RENAMES[sec] || sec)
 
         bucket =
@@ -497,37 +496,37 @@ class TranslationCoverageAnalyzer
         buckets[bucket] << sec
       end
 
-      { lang: lang, buckets: buckets, work: buckets[:add].size + buckets[:revise].size }
+      {lang: lang, buckets: buckets, work: buckets[:add].size + buckets[:revise].size}
     end
 
     print_migration_report(target, prev, target_sections, computed, rows, discrepancies)
   end
 
   def print_migration_report(target, prev, target_sections, computed, rows, discrepancies)
-    new_secs      = target_sections.select { |s| computed[s] == :new }
+    new_secs = target_sections.select { |s| computed[s] == :new }
     reworded_secs = target_sections.select { |s| computed[s] == :reworded }
 
-    if @format == 'json'
+    if @format == "json"
       puts JSON.pretty_generate(
         target: target,
         previous: prev,
-        method: 'computed-diff',
-        change_surface: { new: new_secs, reworded: reworded_secs,
-                          unchanged: target_sections - new_secs - reworded_secs },
+        method: "computed-diff",
+        change_surface: {new: new_secs, reworded: reworded_secs,
+                         unchanged: target_sections - new_secs - reworded_secs},
         annotation_discrepancies: discrepancies,
         languages: rows.map do |r|
-          { language: r[:lang], work_items: r[:work],
-            add: r[:buckets][:add], revise: r[:buckets][:revise], carry: r[:buckets][:carry] }
+          {language: r[:lang], work_items: r[:work],
+           add: r[:buckets][:add], revise: r[:buckets][:revise], carry: r[:buckets][:carry]}
         end
       )
       return
     end
 
-    if @format == 'csv'
+    if @format == "csv"
       puts "Language,Add,Revise,Carry,Work"
       rows.sort_by { |r| -r[:work] }.each do |r|
         puts [r[:lang], r[:buckets][:add].size, r[:buckets][:revise].size,
-              r[:buckets][:carry].size, r[:work]].join(',')
+          r[:buckets][:carry].size, r[:work]].join(",")
       end
       return
     end
@@ -540,8 +539,8 @@ class TranslationCoverageAnalyzer
          "#{new_secs.size} new, #{reworded_secs.size} reworded, " \
          "#{target_sections.size - new_secs.size - reworded_secs.size} unchanged."
     puts
-    puts "  NEW (translate fresh):     #{new_secs.join(', ')}" unless new_secs.empty?
-    puts "  REWORDED (revise):         #{reworded_secs.join(', ')}" unless reworded_secs.empty?
+    puts "  NEW (translate fresh):     #{new_secs.join(", ")}" unless new_secs.empty?
+    puts "  REWORDED (revise):         #{reworded_secs.join(", ")}" unless reworded_secs.empty?
     puts
     puts "PER-LANGUAGE WORKLOAD (each language's #{prev} translation → #{target}):"
     puts "-" * 80
@@ -549,8 +548,8 @@ class TranslationCoverageAnalyzer
     puts "-" * 80
     rows.sort_by { |r| -r[:work] }.each do |r|
       printf "%-15s %6d %8d %7d %7d\n",
-             r[:lang], r[:buckets][:add].size, r[:buckets][:revise].size,
-             r[:buckets][:carry].size, r[:work]
+        r[:lang], r[:buckets][:add].size, r[:buckets][:revise].size,
+        r[:buckets][:carry].size, r[:work]
     end
     puts "-" * 80
     puts
@@ -564,8 +563,8 @@ class TranslationCoverageAnalyzer
         next if r[:work].zero?
 
         puts "#{r[:lang]}:"
-        puts "  add:    #{r[:buckets][:add].join(', ')}"    unless r[:buckets][:add].empty?
-        puts "  revise: #{r[:buckets][:revise].join(', ')}" unless r[:buckets][:revise].empty?
+        puts "  add:    #{r[:buckets][:add].join(", ")}" unless r[:buckets][:add].empty?
+        puts "  revise: #{r[:buckets][:revise].join(", ")}" unless r[:buckets][:revise].empty?
         puts
       end
     end
@@ -609,12 +608,12 @@ class TranslationCoverageAnalyzer
   #   kept_removed  English removed a section the translation still carries
   def consistency_report
     target = @version_filter || PREVIOUS_VERSION
-    prev   = predecessor(target)
+    prev = predecessor(target)
     abort("No HAML predecessor to compare #{target} against") if prev.nil?
 
     eng = english_delta(prev, target)
 
-    langs = (available_languages(prev) & available_languages(target)) - ['en']
+    langs = (available_languages(prev) & available_languages(target)) - ["en"]
     langs.select! { |l| l == @language_filter } if @language_filter
 
     rows = langs.map { |l| language_consistency(l, prev, target, eng) }
@@ -623,19 +622,20 @@ class TranslationCoverageAnalyzer
 
   # English section delta over the union of both versions' sections.
   def english_delta(prev, target)
-    pt = extract_section_texts('en', prev)
-    tt = extract_section_texts('en', target)
+    pt = extract_section_texts("en", prev)
+    tt = extract_section_texts("en", target)
 
     (tt.keys | pt.keys).each_with_object({}) do |id, delta|
       prev_id = SECTION_RENAMES[id] || id
       in_prev = pt.key?(prev_id)
-      in_tgt  = tt.key?(id)
+      in_tgt = tt.key?(id)
 
       delta[id] =
         if in_prev && !in_tgt then :removed
         elsif in_tgt && !in_prev then :added
         elsif pt[prev_id] != tt[id] then :reworded
-        else :unchanged
+        else
+          :unchanged
         end
     end
   end
@@ -643,7 +643,7 @@ class TranslationCoverageAnalyzer
   def language_consistency(lang, prev, target, eng)
     pt = extract_section_texts(lang, prev)
     tt = extract_section_texts(lang, target)
-    issues = { stale: [], drift: [], missing_new: [], kept_removed: [] }
+    issues = {stale: [], drift: [], missing_new: [], kept_removed: []}
 
     eng.each do |id, estatus|
       prev_id = SECTION_RENAMES[id] || id
@@ -658,27 +658,27 @@ class TranslationCoverageAnalyzer
       when :reworded
         issues[:stale] << id if lp && lt && lp == lt
       when :unchanged
-        issues[:drift] << { section: id, similarity: text_similarity(lp, lt) } if lp && lt && lp != lt
+        issues[:drift] << {section: id, similarity: text_similarity(lp, lt)} if lp && lt && lp != lt
       end
     end
 
-    { lang: lang, issues: issues }
+    {lang: lang, issues: issues}
   end
 
   def print_consistency_report(target, prev, eng, rows)
     changed = eng.reject { |_, v| v == :unchanged }
 
-    if @format == 'json'
+    if @format == "json"
       puts JSON.pretty_generate(
         target: target,
         previous: prev,
         english_delta: changed,
         languages: rows.map do |r|
-          { language: r[:lang],
-            stale: r[:issues][:stale],
-            drift: r[:issues][:drift].sort_by { |x| x[:similarity] },
-            missing_new: r[:issues][:missing_new],
-            kept_removed: r[:issues][:kept_removed] }
+          {language: r[:lang],
+           stale: r[:issues][:stale],
+           drift: r[:issues][:drift].sort_by { |x| x[:similarity] },
+           missing_new: r[:issues][:missing_new],
+           kept_removed: r[:issues][:kept_removed]}
         end
       )
       return
@@ -688,7 +688,7 @@ class TranslationCoverageAnalyzer
     puts "TRANSLATION CONSISTENCY  (#{prev} → #{target})"
     puts "Flags where a translation's change pattern diverges from English's."
     puts "=" * 80
-    puts "English delta: " + (changed.empty? ? '(no sections changed)' : changed.map { |k, v| "#{k}=#{v}" }.join(', '))
+    puts "English delta: " + (changed.empty? ? "(no sections changed)" : changed.map { |k, v| "#{k}=#{v}" }.join(", "))
     puts
     puts "  stale = English reworded the section, but the translation did not follow"
     puts "  drift = translation changed a section English left unchanged"
@@ -696,15 +696,15 @@ class TranslationCoverageAnalyzer
     puts "  miss  = English added a section the translation never added"
     puts "  kept  = English removed a section the translation still carries"
     puts
-    printf "%-15s %6s %14s %6s %6s\n", 'Language', 'Stale', 'Drift maj/min', 'Miss', 'Kept'
+    printf "%-15s %6s %14s %6s %6s\n", "Language", "Stale", "Drift maj/min", "Miss", "Kept"
     puts "-" * 80
     ordered = rows.sort_by { |r| -consistency_weight(r) }
     ordered.each do |r|
       d = r[:issues][:drift]
       maj = d.count { |x| x[:similarity] < MAJOR_DRIFT }
       printf "%-15s %6d %14s %6d %6d\n",
-             r[:lang], r[:issues][:stale].size, "#{maj}/#{d.size - maj}",
-             r[:issues][:missing_new].size, r[:issues][:kept_removed].size
+        r[:lang], r[:issues][:stale].size, "#{maj}/#{d.size - maj}",
+        r[:issues][:missing_new].size, r[:issues][:kept_removed].size
     end
     puts "-" * 80
     puts
@@ -715,9 +715,9 @@ class TranslationCoverageAnalyzer
         next if i.values.all?(&:empty?)
 
         puts "#{r[:lang]}:"
-        puts "  stale:        #{i[:stale].join(', ')}" unless i[:stale].empty?
-        puts "  missing-new:  #{i[:missing_new].join(', ')}" unless i[:missing_new].empty?
-        puts "  kept-removed: #{i[:kept_removed].join(', ')}" unless i[:kept_removed].empty?
+        puts "  stale:        #{i[:stale].join(", ")}" unless i[:stale].empty?
+        puts "  missing-new:  #{i[:missing_new].join(", ")}" unless i[:missing_new].empty?
+        puts "  kept-removed: #{i[:kept_removed].join(", ")}" unless i[:kept_removed].empty?
         unless i[:drift].empty?
           puts "  drift (similarity — lower means more changed):"
           i[:drift].sort_by { |x| x[:similarity] }.each do |x|
@@ -744,14 +744,14 @@ class TranslationCoverageAnalyzer
   # consume them. Alignment is by stable section ID, so it's deterministic.
 
   def segments_for(version)
-    en = extract_section_texts('en', version)
-    langs = available_languages(version).reject { |l| l == 'en' }
+    en = extract_section_texts("en", version)
+    langs = available_languages(version).reject { |l| l == "en" }
     langs.select! { |l| l == @language_filter } if @language_filter
 
     langs.flat_map do |lang|
       target = extract_section_texts(lang, version)
       en.keys.select { |id| target.key?(id) }.map do |id|
-        { language: lang, version: version, section: id, source: en[id], target: target[id] }
+        {language: lang, version: version, section: id, source: en[id], target: target[id]}
       end
     end
   end
@@ -761,9 +761,9 @@ class TranslationCoverageAnalyzer
     segs = segments_for(version)
 
     case @format
-    when 'po'  then print_segments_po(segs)
-    when 'csv' then print_segments_csv(segs)
-    else            print_segments_jsonl(segs) # default: one JSON object per line
+    when "po" then print_segments_po(segs)
+    when "csv" then print_segments_csv(segs)
+    else print_segments_jsonl(segs) # default: one JSON object per line
     end
   end
 
@@ -775,13 +775,13 @@ class TranslationCoverageAnalyzer
     puts "language,version,section,source,target"
     segs.each do |s|
       puts [s[:language], s[:version], s[:section],
-            %("#{s[:source].gsub('"', '""')}"), %("#{s[:target].gsub('"', '""')}")].join(',')
+        %("#{s[:source].gsub('"', '""')}"), %("#{s[:target].gsub('"', '""')}")].join(",")
     end
   end
 
   def print_segments_po(segs)
-    puts '# Keep a Changelog — parallel segments for translation QA.'
-    puts '# msgid = English source, msgstr = translation, one entry per section.'
+    puts "# Keep a Changelog — parallel segments for translation QA."
+    puts "# msgid = English source, msgstr = translation, one entry per section."
     puts 'msgid ""'
     puts 'msgstr ""'
     puts '"Content-Type: text/plain; charset=UTF-8\n"'
@@ -811,16 +811,16 @@ class TranslationCoverageAnalyzer
   # link-count mismatches.
 
   def lint_report
-    version  = @version_filter || PREVIOUS_VERSION
-    en       = extract_section_texts('en', version)
-    en_links = section_link_counts('en', version)
+    version = @version_filter || PREVIOUS_VERSION
+    en = extract_section_texts("en", version)
+    en_links = section_link_counts("en", version)
 
-    langs = available_languages(version).reject { |l| l == 'en' }
+    langs = available_languages(version).reject { |l| l == "en" }
     langs.select! { |l| l == @language_filter } if @language_filter
 
     findings = langs.flat_map do |lang|
-      target   = extract_section_texts(lang, version)
-      t_links  = section_link_counts(lang, version)
+      target = extract_section_texts(lang, version)
+      t_links = section_link_counts(lang, version)
       lint_language(lang, en, target, en_links, t_links)
     end
 
@@ -835,11 +835,11 @@ class TranslationCoverageAnalyzer
 
       sim = text_similarity(src, tgt)
       if sim >= UNTRANSLATED_SIMILARITY
-        found << finding(lang, id, 'untranslated', "similarity to English #{sim.round(2)} ≥ #{UNTRANSLATED_SIMILARITY}")
+        found << finding(lang, id, "untranslated", "similarity to English #{sim.round(2)} ≥ #{UNTRANSLATED_SIMILARITY}")
       end
 
       GLOSSARY_TERMS.each do |term|
-        found << finding(lang, id, 'missing-term', "English term #{term.inspect} not present") if src.include?(term) && !tgt.include?(term)
+        found << finding(lang, id, "missing-term", "English term #{term.inspect} not present") if src.include?(term) && !tgt.include?(term)
       end
 
       # Localizing the canonical change types is an accepted per-language choice
@@ -847,25 +847,25 @@ class TranslationCoverageAnalyzer
       # the English headers kept verbatim everywhere.
       if @strict_types
         CHANGE_TYPE_TERMS.each do |term|
-          found << finding(lang, id, 'localized-type', "change-type #{term.inspect} not kept verbatim") if src.include?(term) && !tgt.include?(term)
+          found << finding(lang, id, "localized-type", "change-type #{term.inspect} not kept verbatim") if src.include?(term) && !tgt.include?(term)
         end
       end
 
       LITERAL_PATTERNS.each do |re|
         src.scan(re).uniq.each do |lit|
-          found << finding(lang, id, 'missing-literal', "#{lit.inspect} not present") unless tgt.include?(lit)
+          found << finding(lang, id, "missing-literal", "#{lit.inspect} not present") unless tgt.include?(lit)
         end
       end
 
       ec = en_links[id] || 0
       tc = t_links[id] || 0
-      found << finding(lang, id, 'link-count', "English has #{ec} link(s), translation has #{tc}") if ec != tc
+      found << finding(lang, id, "link-count", "English has #{ec} link(s), translation has #{tc}") if ec != tc
     end
     found
   end
 
   def finding(lang, section, kind, detail)
-    { language: lang, section: section, kind: kind, detail: detail }
+    {language: lang, section: section, kind: kind, detail: detail}
   end
 
   # Count links per section: `link_to` helpers in a HAML file, inline and
@@ -873,11 +873,11 @@ class TranslationCoverageAnalyzer
   def section_link_counts(language, version)
     path = source_file(language, version)
     return {} if path.nil?
-    return markdown_section_link_counts(path) if path.end_with?('.md')
+    return markdown_section_link_counts(path) if path.end_with?(".md")
 
     counts = Hash.new(0)
     current = nil
-    File.foreach(path, encoding: 'UTF-8') do |line|
+    File.foreach(path, encoding: "UTF-8") do |line|
       if (m = line.match(/^\s*%h[34]#([\w-]+)/))
         current = m[1]
         counts[current] += 0
@@ -889,7 +889,7 @@ class TranslationCoverageAnalyzer
       end
       next unless current
 
-      counts[current] += line.scan(/link_to/).size
+      counts[current] += line.scan("link_to").size
     end
     counts
   end
@@ -898,7 +898,7 @@ class TranslationCoverageAnalyzer
     counts = Hash.new(0)
     current = nil
     in_code = false
-    File.foreach(path, encoding: 'UTF-8') do |line|
+    File.foreach(path, encoding: "UTF-8") do |line|
       if line.match?(/^\s*(```|~~~)/)
         in_code = !in_code
         next
@@ -919,25 +919,25 @@ class TranslationCoverageAnalyzer
   end
 
   def print_lint_report(version, langs, findings)
-    if @format == 'json'
+    if @format == "json"
       puts JSON.pretty_generate(version: version, findings: findings)
       return
     end
 
-    if @format == 'csv'
+    if @format == "csv"
       puts "language,section,kind,detail"
-      findings.each { |f| puts [f[:language], f[:section], f[:kind], %("#{f[:detail].gsub('"', '""')}")].join(',') }
+      findings.each { |f| puts [f[:language], f[:section], f[:kind], %("#{f[:detail].gsub('"', '""')}")].join(",") }
       return
     end
 
-    kinds  = lint_kinds
-    labels = { 'untranslated' => 'untrans', 'localized-type' => 'loc-type',
-               'missing-term' => 'term', 'missing-literal' => 'lit', 'link-count' => 'links' }
-    legend = { 'untranslated'    => "section text is ~identical to English (≥ #{UNTRANSLATED_SIMILARITY} similarity)",
-               'localized-type'  => "a canonical change type (Added/Changed/…) was not kept verbatim",
-               'missing-term'    => "[YANKED]/Unreleased/CHANGELOG present in English but absent",
-               'missing-literal' => "a date or version present in English is absent",
-               'link-count'      => "the number of links differs from English" }
+    kinds = lint_kinds
+    labels = {"untranslated" => "untrans", "localized-type" => "loc-type",
+              "missing-term" => "term", "missing-literal" => "lit", "link-count" => "links"}
+    legend = {"untranslated" => "section text is ~identical to English (≥ #{UNTRANSLATED_SIMILARITY} similarity)",
+              "localized-type" => "a canonical change type (Added/Changed/…) was not kept verbatim",
+              "missing-term" => "[YANKED]/Unreleased/CHANGELOG present in English but absent",
+              "missing-literal" => "a date or version present in English is absent",
+              "link-count" => "the number of links differs from English"}
 
     puts "=" * 80
     puts "TRANSLATION LINT  (en/#{version} vs each translation)"
@@ -976,9 +976,9 @@ class TranslationCoverageAnalyzer
   end
 
   def lint_kinds
-    kinds = ['untranslated']
-    kinds << 'localized-type' if @strict_types
-    kinds + ['missing-term', 'missing-literal', 'link-count']
+    kinds = ["untranslated"]
+    kinds << "localized-type" if @strict_types
+    kinds + ["missing-term", "missing-literal", "link-count"]
   end
 
   # --- Static dashboard ----------------------------------------------------
@@ -986,12 +986,12 @@ class TranslationCoverageAnalyzer
   # data is embedded as JSON in tools/dashboard_template.html, so the result
   # opens directly in a browser (file://) with no server and no network access.
 
-  DASHBOARD_TEMPLATE = File.join(__dir__, 'tools', 'dashboard_template.html')
-  DASHBOARD_OUTPUT   = File.join(__dir__, 'translation-dashboard.html')
+  DASHBOARD_TEMPLATE = File.join(__dir__, "tools", "dashboard_template.html")
+  DASHBOARD_OUTPUT = File.join(__dir__, "translation-dashboard.html")
 
   def generate_dashboard
     output = @dashboard.is_a?(String) ? @dashboard : DASHBOARD_OUTPUT
-    File.write(output, dashboard_html, encoding: 'UTF-8')
+    File.write(output, dashboard_html, encoding: "UTF-8")
     puts "Wrote #{output} — open it directly in a browser, no server needed."
   end
 
@@ -999,9 +999,9 @@ class TranslationCoverageAnalyzer
   # `public` declarations at the bottom of the class) so config.rb can embed it
   # as the /translations/progress page on every site build.
   def dashboard_html
-    template = File.read(DASHBOARD_TEMPLATE, encoding: 'UTF-8')
+    template = File.read(DASHBOARD_TEMPLATE, encoding: "UTF-8")
     json = JSON.generate(dashboard_data, script_safe: true)
-    html = template.sub('__DASHBOARD_DATA__') { json }
+    html = template.sub("__DASHBOARD_DATA__") { json }
 
     abort("Template placeholder __DASHBOARD_DATA__ not found in #{DASHBOARD_TEMPLATE}") if html == template
 
@@ -1016,10 +1016,10 @@ class TranslationCoverageAnalyzer
       data = results[:versions][v]
       next if data.nil?
 
-      { version: v,
-        sections: data[:section_count],
-        id_based: !data[:uses_markdown],
-        published: Gem::Version.new(v) <= Gem::Version.new(VersionRouting::PUBLISHED_VERSION) }
+      {version: v,
+       sections: data[:section_count],
+       id_based: !data[:uses_markdown],
+       published: Gem::Version.new(v) <= Gem::Version.new(VersionRouting::PUBLISHED_VERSION)}
     end
 
     codes = results[:versions].values.compact.flat_map { |d| d[:languages].keys }.uniq.sort
@@ -1029,20 +1029,20 @@ class TranslationCoverageAnalyzer
         info = results[:versions][ver[:version]]&.dig(:languages, code)
         next unless info
 
-        h[ver[:version]] = { coverage: info[:coverage_percentage],
+        h[ver[:version]] = {coverage: info[:coverage_percentage],
                              complete: info[:complete_count],
                              missing: info[:missing_count],
-                             missing_sections: info[:missing_sections] || [] }
+                             missing_sections: info[:missing_sections] || []}
       end
 
-      { code: code, name: names[code] || code, versions: cells }
+      {code: code, name: names[code] || code, versions: cells}
     end
 
-    { generated_at: Time.now.utc.strftime('%Y-%m-%d %H:%M UTC'),
-      latest_version: LATEST_VERSION,
-      published_version: VersionRouting::PUBLISHED_VERSION,
-      versions: versions,
-      languages: languages }
+    {generated_at: Time.now.utc.strftime("%Y-%m-%d %H:%M UTC"),
+     latest_version: LATEST_VERSION,
+     published_version: VersionRouting::PUBLISHED_VERSION,
+     versions: versions,
+     languages: languages}
   end
 
   # Human-readable language names, read from the $languages map in config.rb so
@@ -1050,12 +1050,12 @@ class TranslationCoverageAnalyzer
   # which only exists as `id-ID` in config) fall back to a base-code match, then
   # to the code itself.
   def language_names
-    config_path = File.join(__dir__, 'config.rb')
+    config_path = File.join(__dir__, "config.rb")
     return {} unless File.exist?(config_path)
 
     names = {}
     current = nil
-    File.foreach(config_path, encoding: 'UTF-8') do |line|
+    File.foreach(config_path, encoding: "UTF-8") do |line|
       if (entry = line.match(/^\s*"([\w-]+)"\s*=>\s*\{/))
         current = entry[1]
       elsif current && (name = line.match(/^\s*name:\s*"([^"]+)"/))
@@ -1065,8 +1065,8 @@ class TranslationCoverageAnalyzer
     end
 
     names.default_proc = proc do |hash, code|
-      base = code.split('-').first
-      match = hash.keys.find { |k| k.split('-').first == base }
+      base = code.split("-").first
+      match = hash.keys.find { |k| k.split("-").first == base }
       match && hash[match]
     end
     names
@@ -1124,18 +1124,18 @@ class TranslationCoverageAnalyzer
 
     sorted_languages.each do |lang, info|
       status_indicator = case info[:coverage_percentage]
-                        when 100 then "✓"
-                        when 75..99 then "●"
-                        when 50..74 then "◐"
-                        else "○"
-                        end
+      when 100 then "✓"
+      when 75..99 then "●"
+      when 50..74 then "◐"
+      else "○"
+      end
 
       printf "%-15s %8d   %8d   %9.1f%% %s\n",
-             lang,
-             info[:complete_count],
-             info[:missing_count],
-             info[:coverage_percentage],
-             status_indicator
+        lang,
+        info[:complete_count],
+        info[:missing_count],
+        info[:coverage_percentage],
+        status_indicator
     end
     puts "-" * 80
     puts
@@ -1198,7 +1198,7 @@ class TranslationCoverageAnalyzer
           info[:missing_count],
           data[:section_count],
           info[:coverage_percentage]
-        ].join(',')
+        ].join(",")
       end
     end
   end
@@ -1224,32 +1224,32 @@ if __FILE__ == $PROGRAM_NAME
     end
 
     opts.on("-m", "--migration", "Show 2.0 migration workload: which sections each",
-            "  language must add, revise (reworded upstream), or carry over") do
+      "  language must add, revise (reworded upstream), or carry over") do
       options[:migration] = true
     end
 
     opts.on("-c", "--consistency", "Audit each translation's change pattern against",
-            "  English's between reference versions (stale / drift / miss / kept)") do
+      "  English's between reference versions (stale / drift / miss / kept)") do
       options[:consistency] = true
     end
 
     opts.on("--lint", "Deterministic, rule-based QA: untranslated text, dropped",
-            "  terms/dates/versions, link-count mismatches") do
+      "  terms/dates/versions, link-count mismatches") do
       options[:lint] = true
     end
 
     opts.on("--strict-types", "With --lint, also flag change-type headers",
-            "  (Added/Changed/…) that were localized instead of kept verbatim") do
+      "  (Added/Changed/…) that were localized instead of kept verbatim") do
       options[:strict_types] = true
     end
 
     opts.on("--segments", "Export aligned en<->translation segments for external QA",
-            "  tools (use --format jsonl [default], csv, or po)") do
+      "  tools (use --format jsonl [default], csv, or po)") do
       options[:segments] = true
     end
 
     opts.on("--dashboard [PATH]", "Write a self-contained HTML dashboard of coverage",
-            "  across languages and versions (default: translation-dashboard.html)") do |path|
+      "  across languages and versions (default: translation-dashboard.html)") do |path|
       options[:dashboard] = path || true
     end
 

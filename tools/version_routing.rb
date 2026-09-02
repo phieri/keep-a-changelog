@@ -18,6 +18,7 @@ require_relative "version_support"
 # released" contract is asserted in CI, not just trusted to live config.
 module VersionRouting
   extend VersionSupport
+
   module_function
 
   # 2.0.0 is written and built on every run but stays unpublished — 1.1.0 remains
